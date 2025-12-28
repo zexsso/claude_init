@@ -6,7 +6,7 @@ A Claude Code plugin with productivity commands, specialized agents, and a custo
 
 ```bash
 # Clone the repo
-git clone https://github.com/YOUR_USERNAME/cc-init.git
+git clone https://github.com/zexsso/cc-init.git
 cd cc-init
 
 # Install globally with symlinks (recommended)
@@ -29,11 +29,13 @@ bun cli.ts status             # Check what's installed
 The statusline is separate from the plugin. To use it:
 
 1. **Install Bun** (if not installed):
+
    ```powershell
    powershell -c "irm bun.sh/install.ps1 | iex"
    ```
 
 2. **Add to `~/.claude/settings.json`**:
+
    ```json
    {
      "statusLine": {
@@ -52,25 +54,25 @@ The statusline is separate from the plugin. To use it:
 
 ### Commands (8)
 
-| Command | Description |
-|---------|-------------|
-| `/commit` | Fast conventional commits with immediate push |
-| `/create-pull-request` | Auto-generated PR creation |
-| `/watch-ci` | Monitor CI pipeline and auto-fix failures |
-| `/fix-pr-comments` | Resolve PR review comments systematically |
-| `/run-tasks` | Execute GitHub issues with EPCT workflow |
-| `/epct` | Explore-Plan-Code-Test methodology |
-| `/explore` | Deep codebase exploration |
-| `/oneshot` | Quick one-shot task execution |
+| Command                | Description                                   |
+| ---------------------- | --------------------------------------------- |
+| `/commit`              | Fast conventional commits with immediate push |
+| `/create-pull-request` | Auto-generated PR creation                    |
+| `/watch-ci`            | Monitor CI pipeline and auto-fix failures     |
+| `/fix-pr-comments`     | Resolve PR review comments systematically     |
+| `/run-tasks`           | Execute GitHub issues with EPCT workflow      |
+| `/epct`                | Explore-Plan-Code-Test methodology            |
+| `/explore`             | Deep codebase exploration                     |
+| `/oneshot`             | Quick one-shot task execution                 |
 
 ### Agents (4)
 
-| Agent | Description |
-|-------|-------------|
-| `explore-codebase` | Comprehensive code discovery and analysis |
-| `explore-docs` | Documentation exploration |
-| `websearch` | Quick web research with authoritative sources |
-| `action` | Action-focused task execution |
+| Agent              | Description                                   |
+| ------------------ | --------------------------------------------- |
+| `explore-codebase` | Comprehensive code discovery and analysis     |
+| `explore-docs`     | Documentation exploration                     |
+| `websearch`        | Quick web research with authoritative sources |
+| `action`           | Action-focused task execution                 |
 
 ### Statusline
 
@@ -106,6 +108,7 @@ cc-init/
 ## Credential Locations (for usage API)
 
 Checked in order:
+
 1. `CLAUDE_CODE_OAUTH_TOKEN` env var
 2. `~/.claude/credentials.json`
 3. `~/.claude/.credentials.json`
