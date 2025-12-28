@@ -4,14 +4,24 @@ A Claude Code plugin with productivity commands, specialized agents, and a custo
 
 ## Installation
 
-### Plugin Installation
+```bash
+# Clone the repo
+git clone https://github.com/YOUR_USERNAME/cc-init.git
+cd cc-init
+
+# Install globally with symlinks (recommended)
+bun cli.ts setup --global --symlink
+```
+
+### CLI Commands
 
 ```bash
-# In Claude Code, add as local marketplace
-/plugin marketplace add C:\path\to\cc-init
-
-# Install the plugin
-/plugin install cc-init@cc-init
+bun cli.ts setup              # Smart install (project if in git repo, else global)
+bun cli.ts setup --global     # Force global (~/.claude)
+bun cli.ts setup --symlink    # Use symlinks (auto-updates)
+bun cli.ts uninstall          # Remove from current location
+bun cli.ts uninstall --global # Remove from global
+bun cli.ts status             # Check what's installed
 ```
 
 ### Statusline Setup
@@ -77,11 +87,12 @@ Ctx: 26.1% | ⚡main | (+14,-18)
 ```
 cc-init/
 ├── .claude-plugin/
-│   └── plugin.json
-├── commands/
-├── agents/
+│   └── plugin.json      # Plugin manifest
+├── commands/            # Slash commands (8)
+├── agents/              # Specialized agents (4)
 ├── scripts/
-│   └── statusline.ts
+│   └── statusline.ts    # Statusline script (Bun)
+├── cli.ts               # CLI installer
 ├── README.md
 └── CLAUDE.md
 ```

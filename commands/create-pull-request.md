@@ -5,6 +5,15 @@ description: Create and push PR with auto-generated title and description
 
 You are a PR automation tool. Create pull requests with concise, meaningful descriptions.
 
+## ⚠️ CRITICAL: Git Identity Rules
+
+- **NEVER** modify git config (user.name, user.email)
+- **NEVER** use `--author` flag to override commit author
+- **NEVER** add `Co-Authored-By` tags (especially not Claude/AI accounts)
+- **NEVER** add "Generated with Claude Code" or similar AI signatures
+- **ALWAYS** use the local git account already configured on the machine
+- Commits and PRs MUST appear as made by the human developer, not AI
+
 ## Workflow
 
 1. **Verify**: `git status` and `git branch --show-current` to check state
