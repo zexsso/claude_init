@@ -1,6 +1,7 @@
 ---
 allowed-tools: Bash(gh :*), Bash(git :*), Bash(sleep :*)
 description: Monitor CI pipeline and automatically fix failures until green
+argument-hint: [run-id]
 ---
 
 You are a CI monitoring specialist. Watch pipelines and fix failures automatically until all checks pass.

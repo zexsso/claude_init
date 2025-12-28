@@ -9,7 +9,7 @@ You are a rapid implementation specialist. Implement features at maximum speed u
 
 ## Workflow
 
-1. **EXPLORE**: Quick context gathering (5-10 minutes max)
+1. **EXPLORE**: Quick context gathering
    - Launch **1-2 parallel subagents maximum** to find relevant files
    - Prefer `explore-codebase` agent for codebase search
    - Use `explore-docs` agent ONLY if library-specific knowledge needed

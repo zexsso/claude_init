@@ -1,5 +1,6 @@
 ---
 description: Fetch PR review comments and implement all requested changes
+argument-hint: [pr-number]
 allowed-tools: Bash(gh :*), Bash(git :*), Read, Edit, MultiEdit
 ---
 
