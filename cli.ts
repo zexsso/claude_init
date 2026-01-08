@@ -51,12 +51,16 @@ function getTargetDir(forceGlobal: boolean): string {
   return isInGitRepo() ? LOCAL_CLAUDE : GLOBAL_CLAUDE;
 }
 
-function installFiles(srcDir: string, targetDir: string, useSymlink: boolean): number {
-  if (!existsSync(srcDir)) return 0;
+type InstallResult = { count: number; symlinkFailed: boolean };
+
+function installFiles(srcDir: string, targetDir: string, useSymlink: boolean): InstallResult {
+  if (!existsSync(srcDir)) return { count: 0, symlinkFailed: false };
 
   mkdirSync(targetDir, { recursive: true });
 
   const files = readdirSync(srcDir).filter(f => f.endsWith(".md"));
+  let symlinkFailed = false;
+
   for (const file of files) {
     const src = join(srcDir, file);
     const dest = join(targetDir, file);
@@ -67,14 +71,25 @@ function installFiles(srcDir: string, targetDir: string, useSymlink: boolean): n
     }
 
     if (useSymlink) {
-      symlinkSync(resolve(src), dest);
-      log.item(`Linked: ${file}`);
+      try {
+        symlinkSync(resolve(src), dest);
+        log.item(`Linked: ${file}`);
+      } catch (err: any) {
+        if (err.code === "EPERM") {
+          // Windows symlink permission error - fallback to copy
+          symlinkFailed = true;
+          cpSync(src, dest);
+          log.item(`Copied: ${file} (symlink failed)`);
+        } else {
+          throw err;
+        }
+      }
     } else {
       cpSync(src, dest);
       log.item(`Copied: ${file}`);
     }
   }
-  return files.length;
+  return { count: files.length, symlinkFailed };
 }
 
 function removeFiles(srcDir: string, targetDir: string): number {
@@ -105,7 +120,7 @@ function setup(args: string[]) {
 
   // Install commands
   log.info("Installing commands...");
-  const cmdCount = installFiles(
+  const cmdResult = installFiles(
     join(PKG_ROOT, "commands"),
     join(targetDir, "commands"),
     useSymlink
@@ -113,14 +128,24 @@ function setup(args: string[]) {
 
   // Install agents
   log.info("Installing agents...");
-  const agentCount = installFiles(
+  const agentResult = installFiles(
     join(PKG_ROOT, "agents"),
     join(targetDir, "agents"),
     useSymlink
   );
 
   console.log();
-  log.success(`Installed ${cmdCount} commands and ${agentCount} agents!`);
+  log.success(`Installed ${cmdResult.count} commands and ${agentResult.count} agents!`);
+
+  // Windows symlink warning
+  const symlinkFailed = cmdResult.symlinkFailed || agentResult.symlinkFailed;
+  if (symlinkFailed) {
+    console.log();
+    log.warn("Symlinks failed (Windows requires Admin or Developer Mode).");
+    log.warn("Files were copied instead. To enable symlinks:");
+    log.item("Option 1: Run terminal as Administrator");
+    log.item("Option 2: Enable Developer Mode in Windows Settings > Privacy & Security > For developers");
+  }
 
   // Statusline hint
   const statuslineScript = join(PKG_ROOT, "scripts", "statusline.ts");
@@ -138,7 +163,7 @@ function setup(args: string[]) {
 `);
   }
 
-  if (!useSymlink) {
+  if (!useSymlink && !symlinkFailed) {
     log.warn("Tip: Use --symlink for auto-updates on git pull");
   }
 }
