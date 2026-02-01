@@ -30,7 +30,11 @@ The statusline is separate from the plugin. To use it:
 
 1. **Install Bun** (if not installed):
 
-   ```powershell
+   ```bash
+   # macOS/Linux
+   curl -fsSL https://bun.sh/install | bash
+
+   # Windows (PowerShell)
    powershell -c "irm bun.sh/install.ps1 | iex"
    ```
 
@@ -40,7 +44,7 @@ The statusline is separate from the plugin. To use it:
    {
      "statusLine": {
        "type": "command",
-       "command": "bun C:\\path\\to\\cc-init\\scripts\\statusline.ts",
+       "command": "bun /path/to/cc-init/scripts/statusline.ts",
        "padding": 0
      }
    }
@@ -113,8 +117,9 @@ Checked in order:
 2. `~/.claude/credentials.json`
 3. `~/.claude/.credentials.json`
 4. `~/.claude.json`
-5. `%LOCALAPPDATA%\Claude\credentials.json`
-6. `%APPDATA%\Claude\credentials.json`
+5. `$HOME/Library/Application Support/Claude/credentials.json` (macOS)
+6. `%LOCALAPPDATA%\Claude\credentials.json` (Windows)
+7. `%APPDATA%\Claude\credentials.json` (Windows)
 
 ## License
 

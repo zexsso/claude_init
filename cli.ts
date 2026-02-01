@@ -137,14 +137,18 @@ function setup(args: string[]) {
   console.log();
   log.success(`Installed ${cmdResult.count} commands and ${agentResult.count} agents!`);
 
-  // Windows symlink warning
+  // Symlink permission warning
   const symlinkFailed = cmdResult.symlinkFailed || agentResult.symlinkFailed;
   if (symlinkFailed) {
     console.log();
-    log.warn("Symlinks failed (Windows requires Admin or Developer Mode).");
+    log.warn("Symlinks failed due to permission error.");
     log.warn("Files were copied instead. To enable symlinks:");
-    log.item("Option 1: Run terminal as Administrator");
-    log.item("Option 2: Enable Developer Mode in Windows Settings > Privacy & Security > For developers");
+    if (process.platform === "win32") {
+      log.item("Option 1: Run terminal as Administrator");
+      log.item("Option 2: Enable Developer Mode in Windows Settings > Privacy & Security > For developers");
+    } else {
+      log.item("Check directory permissions or run with appropriate privileges");
+    }
   }
 
   // Statusline hint

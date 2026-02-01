@@ -71,7 +71,7 @@ Ctx: 26.1% | ⚡main | (+14,-18)
 {
   "statusLine": {
     "type": "command",
-    "command": "bun C:\\path\\to\\scripts\\statusline.ts",
+    "command": "bun /path/to/cc-init/scripts/statusline.ts",
     "padding": 0
   }
 }

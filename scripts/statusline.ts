@@ -19,7 +19,15 @@ const MAX_TOKENS = 200_000;
 const CACHE_TTL_MS = 30_000; // Cache API response for 30s
 const GIT_TIMEOUT_MS = 2000;
 const CACHE_FILE = join(tmpdir(), "claude-statusline-cache.json");
-const CRED_PATH = join(homedir(), ".claude", ".credentials.json");
+
+// Credential paths to check (in order of priority)
+const CRED_PATHS = [
+  join(homedir(), ".claude", "credentials.json"),
+  join(homedir(), ".claude", ".credentials.json"),
+  join(homedir(), ".claude.json"),
+  // macOS Application Support
+  join(homedir(), "Library", "Application Support", "Claude", "credentials.json"),
+];
 
 // ANSI Colors
 const COLOR = {
@@ -92,12 +100,22 @@ function progressBar(percent: number, width = 25): string {
 // ============================================================================
 
 function getToken(): string | null {
-  try {
-    const data = JSON.parse(readFileSync(CRED_PATH, "utf8"));
-    return data?.claudeAiOauth?.accessToken || null;
-  } catch {
-    return null;
+  // Check environment variable first
+  const envToken = process.env.CLAUDE_CODE_OAUTH_TOKEN;
+  if (envToken) return envToken;
+
+  // Try each credential path
+  for (const credPath of CRED_PATHS) {
+    try {
+      if (!existsSync(credPath)) continue;
+      const data = JSON.parse(readFileSync(credPath, "utf8"));
+      const token = data?.claudeAiOauth?.accessToken;
+      if (token) return token;
+    } catch {
+      continue;
+    }
   }
+  return null;
 }
 
 async function fetchUsage(): Promise<{ percent: number; resetMs: number } | null> {
