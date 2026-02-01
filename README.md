@@ -114,10 +114,10 @@ cc-init/
 Checked in order:
 
 1. `CLAUDE_CODE_OAUTH_TOKEN` env var
-2. `~/.claude/credentials.json`
-3. `~/.claude/.credentials.json`
-4. `~/.claude.json`
-5. `$HOME/Library/Application Support/Claude/credentials.json` (macOS)
+2. **macOS Keychain** (`Claude Code-credentials`) - primary on macOS
+3. `~/.claude/credentials.json`
+4. `~/.claude/.credentials.json`
+5. `~/.claude.json`
 6. `%LOCALAPPDATA%\Claude\credentials.json` (Windows)
 7. `%APPDATA%\Claude\credentials.json` (Windows)
 

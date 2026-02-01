@@ -99,10 +99,29 @@ function progressBar(percent: number, width = 25): string {
 // DATA FETCHING
 // ============================================================================
 
+function getTokenFromKeychain(): string | null {
+  // macOS Keychain support
+  if (process.platform !== "darwin") return null;
+  try {
+    const output = execSync('security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null', {
+      encoding: "utf8",
+      timeout: 2000,
+    });
+    const data = JSON.parse(output.trim());
+    return data?.claudeAiOauth?.accessToken || null;
+  } catch {
+    return null;
+  }
+}
+
 function getToken(): string | null {
   // Check environment variable first
   const envToken = process.env.CLAUDE_CODE_OAUTH_TOKEN;
   if (envToken) return envToken;
+
+  // Try macOS Keychain first (most common on macOS)
+  const keychainToken = getTokenFromKeychain();
+  if (keychainToken) return keychainToken;
 
   // Try each credential path
   for (const credPath of CRED_PATHS) {
