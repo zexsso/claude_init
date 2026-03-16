@@ -6,7 +6,8 @@
  * Line 2: Ctx: 26.1% | ⚡main | (+14,-18)
  */
 
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
+import { execSync } from "node:child_process";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -91,7 +92,9 @@ function readCache(): CachedUsage | null {
 }
 
 function writeCache(usage: Omit<CachedUsage, "cachedAt">): void {
-  Bun.write(CACHE_FILE, JSON.stringify({ ...usage, cachedAt: Date.now() })).catch(() => {});
+  try {
+    writeFileSync(CACHE_FILE, JSON.stringify({ ...usage, cachedAt: Date.now() }));
+  } catch {}
 }
 
 // ============================================================================
@@ -233,25 +236,18 @@ async function getContextPercent(transcriptPath: string): Promise<number> {
   return 0;
 }
 
-async function getGitInfo(cwd: string): Promise<{ branch: string; added: number; removed: number }> {
+function getGitInfo(cwd: string): { branch: string; added: number; removed: number } {
   try {
-    const proc = Bun.spawn(["git", "branch", "--show-current"], {
-      cwd,
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    const branchOut = await new Response(proc.stdout).text();
-    const branch = branchOut.trim();
+    const output = execSync(
+      'git branch --show-current && git diff HEAD --numstat',
+      { cwd, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"], timeout: GIT_TIMEOUT_MS }
+    );
 
-    const diffProc = Bun.spawn(["git", "diff", "HEAD", "--numstat"], {
-      cwd,
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    const diffOut = await new Response(diffProc.stdout).text();
-
+    const [branchLine, ...rest] = output.split("\n");
+    const branch = branchLine?.trim() || "";
     let added = 0, removed = 0;
-    for (const line of diffOut.split("\n")) {
+
+    for (const line of rest) {
       if (!line.trim()) continue;
       const [a, r] = line.split("\t");
       if (a !== "-") added += parseInt(a, 10) || 0;
@@ -298,10 +294,10 @@ async function main(): Promise<void> {
     const input: HookInput = JSON.parse(chunks.join(""));
     const cwd = input.workspace?.current_dir || input.cwd;
 
-    const [usage, ctxPercent, git] = await Promise.all([
+    const git = getGitInfo(cwd);
+    const [usage, ctxPercent] = await Promise.all([
       fetchUsage(),
       getContextPercent(input.transcript_path),
-      getGitInfo(cwd),
     ]);
 
     console.log(buildOutput(usage, ctxPercent, git));
