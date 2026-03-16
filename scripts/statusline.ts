@@ -2,12 +2,11 @@
 /**
  * Claude Code Statusline
  *
- * Line 1: [████████████] 96.1% | 2h 30m
+ * Line 1: [████████████] 2.0% | 4h 12m | Wk: 0.0%
  * Line 2: Ctx: 26.1% | ⚡main | (+14,-18)
  */
 
-import { existsSync, readFileSync, writeFileSync, statSync } from "node:fs";
-import { execSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -16,20 +15,33 @@ import { join } from "node:path";
 // ============================================================================
 
 const MAX_TOKENS = 200_000;
-const CACHE_TTL_MS = 30_000; // Cache API response for 30s
-const GIT_TIMEOUT_MS = 2000;
+const CACHE_TTL_MS = 30_000;
+const GIT_TIMEOUT_MS = 2_000;
+const KEYCHAIN_TIMEOUT_MS = 2_000;
+const TRANSCRIPT_TAIL_BYTES = 50_000;
+const FIVE_HOUR_MS = 5 * 60 * 60 * 1000;
+const SEVEN_DAY_MS = 7 * 24 * 60 * 60 * 1000;
 const CACHE_FILE = join(tmpdir(), "claude-statusline-cache.json");
 
-// Credential paths to check (in order of priority)
-const CRED_PATHS = [
-  join(homedir(), ".claude", "credentials.json"),
-  join(homedir(), ".claude", ".credentials.json"),
-  join(homedir(), ".claude.json"),
-  // macOS Application Support
-  join(homedir(), "Library", "Application Support", "Claude", "credentials.json"),
-];
+const CRED_PATHS = (() => {
+  const home = homedir();
+  const paths = [
+    join(home, ".claude", "credentials.json"),
+    join(home, ".claude", ".credentials.json"),
+    join(home, ".claude.json"),
+  ];
+  if (process.platform === "darwin") {
+    paths.push(join(home, "Library", "Application Support", "Claude", "credentials.json"));
+  }
+  if (process.platform === "win32") {
+    const localAppData = process.env.LOCALAPPDATA;
+    const appData = process.env.APPDATA;
+    if (localAppData) paths.push(join(localAppData, "Claude", "credentials.json"));
+    if (appData) paths.push(join(appData, "Claude", "credentials.json"));
+  }
+  return paths;
+})();
 
-// ANSI Colors
 const COLOR = {
   cyan: "\x1b[36m",
   yellow: "\x1b[33m",
@@ -53,8 +65,17 @@ interface HookInput {
 
 interface CachedUsage {
   percent: number;
-  resetMs: number;
+  resetsAt: number;
+  weekPercent: number;
+  weekResetsAt: number;
   cachedAt: number;
+}
+
+interface UsageData {
+  percent: number;
+  resetMs: number;
+  weekPercent: number;
+  weekResetMs: number;
 }
 
 // ============================================================================
@@ -63,18 +84,14 @@ interface CachedUsage {
 
 function readCache(): CachedUsage | null {
   try {
-    if (!existsSync(CACHE_FILE)) return null;
     const data = JSON.parse(readFileSync(CACHE_FILE, "utf8")) as CachedUsage;
     if (Date.now() - data.cachedAt < CACHE_TTL_MS) return data;
   } catch {}
   return null;
 }
 
-function writeCache(percent: number, resetMs: number): void {
-  try {
-    const data: CachedUsage = { percent, resetMs, cachedAt: Date.now() };
-    writeFileSync(CACHE_FILE, JSON.stringify(data));
-  } catch {}
+function writeCache(usage: Omit<CachedUsage, "cachedAt">): void {
+  Bun.write(CACHE_FILE, JSON.stringify({ ...usage, cachedAt: Date.now() })).catch(() => {});
 }
 
 // ============================================================================
@@ -95,52 +112,65 @@ function progressBar(percent: number, width = 25): string {
   return `${COLOR.gray}[${COLOR.cyan}${"█".repeat(filled)}${" ".repeat(width - filled)}${COLOR.gray}]${COLOR.reset}`;
 }
 
-// ============================================================================
-// DATA FETCHING
-// ============================================================================
-
-function getTokenFromKeychain(): string | null {
-  // macOS Keychain support
-  if (process.platform !== "darwin") return null;
+function extractOAuthToken(json: string): string | null {
   try {
-    const output = execSync('security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null', {
-      encoding: "utf8",
-      timeout: 2000,
-    });
-    const data = JSON.parse(output.trim());
-    return data?.claudeAiOauth?.accessToken || null;
+    return JSON.parse(json)?.claudeAiOauth?.accessToken || null;
   } catch {
     return null;
   }
 }
 
+function parseBucket(bucket: any, defaultMs: number, now: number): { utilization: number; resetsAt: number } {
+  return {
+    utilization: bucket?.utilization ?? 0,
+    resetsAt: bucket?.resets_at ? new Date(bucket.resets_at).getTime() : now + defaultMs,
+  };
+}
+
+function cachedToUsage(cached: CachedUsage): UsageData {
+  const now = Date.now();
+  return {
+    percent: cached.percent,
+    resetMs: Math.max(0, cached.resetsAt - now),
+    weekPercent: cached.weekPercent,
+    weekResetMs: Math.max(0, cached.weekResetsAt - now),
+  };
+}
+
+// ============================================================================
+// DATA FETCHING
+// ============================================================================
+
 function getToken(): string | null {
-  // Check environment variable first
   const envToken = process.env.CLAUDE_CODE_OAUTH_TOKEN;
   if (envToken) return envToken;
 
-  // Try macOS Keychain first (most common on macOS)
-  const keychainToken = getTokenFromKeychain();
-  if (keychainToken) return keychainToken;
+  // macOS Keychain
+  if (process.platform === "darwin") {
+    try {
+      const { execSync } = require("node:child_process");
+      const output = execSync('security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null', {
+        encoding: "utf8",
+        timeout: KEYCHAIN_TIMEOUT_MS,
+      });
+      const token = extractOAuthToken(output.trim());
+      if (token) return token;
+    } catch {}
+  }
 
-  // Try each credential path
+  // Credential files
   for (const credPath of CRED_PATHS) {
     try {
-      if (!existsSync(credPath)) continue;
-      const data = JSON.parse(readFileSync(credPath, "utf8"));
-      const token = data?.claudeAiOauth?.accessToken;
+      const token = extractOAuthToken(readFileSync(credPath, "utf8"));
       if (token) return token;
-    } catch {
-      continue;
-    }
+    } catch {}
   }
   return null;
 }
 
-async function fetchUsage(): Promise<{ percent: number; resetMs: number } | null> {
-  // Check cache first
+async function fetchUsage(): Promise<UsageData | null> {
   const cached = readCache();
-  if (cached) return { percent: cached.percent, resetMs: cached.resetMs - (Date.now() - cached.cachedAt) };
+  if (cached) return cachedToUsage(cached);
 
   const token = getToken();
   if (!token) return null;
@@ -156,32 +186,40 @@ async function fetchUsage(): Promise<{ percent: number; resetMs: number } | null
     if (!res.ok) return null;
 
     const data = await res.json();
-    const fiveHour = data?.five_hour;
-    const percent = fiveHour?.utilization ?? 0;
-    const resetMs = fiveHour?.resets_at
-      ? Math.max(0, new Date(fiveHour.resets_at).getTime() - Date.now())
-      : 5 * 60 * 60 * 1000;
+    const now = Date.now();
 
-    writeCache(percent, resetMs);
-    return { percent, resetMs };
+    const fiveHour = parseBucket(data?.five_hour, FIVE_HOUR_MS, now);
+    const sevenDay = parseBucket(data?.seven_day, SEVEN_DAY_MS, now);
+
+    const cacheData = {
+      percent: fiveHour.utilization,
+      resetsAt: fiveHour.resetsAt,
+      weekPercent: sevenDay.utilization,
+      weekResetsAt: sevenDay.resetsAt,
+    };
+
+    writeCache(cacheData);
+    return cachedToUsage({ ...cacheData, cachedAt: now });
   } catch {
     return null;
   }
 }
 
-function getContextPercent(transcriptPath: string): number {
-  if (!transcriptPath || !existsSync(transcriptPath)) return 0;
+async function getContextPercent(transcriptPath: string): Promise<number> {
+  if (!transcriptPath) return 0;
 
   try {
-    // Read last 50KB of file (optimization: don't parse entire transcript)
-    const stats = statSync(transcriptPath);
-    const fd = Bun.file(transcriptPath);
-    const start = Math.max(0, stats.size - 50000);
-    const content = readFileSync(transcriptPath, "utf8").slice(start);
+    const file = Bun.file(transcriptPath);
+    const size = file.size;
+    const start = Math.max(0, size - TRANSCRIPT_TAIL_BYTES);
+    const content = await file.slice(start, size).text();
 
-    // Find last valid usage entry
-    const lines = content.split("\n").reverse();
-    for (const line of lines) {
+    // Scan backward for the last usage entry
+    let pos = content.length;
+    while (pos > 0) {
+      const lineEnd = pos;
+      pos = content.lastIndexOf("\n", pos - 1);
+      const line = content.slice(pos + 1, lineEnd);
       if (!line.includes('"usage"')) continue;
       try {
         const entry = JSON.parse(line);
@@ -195,20 +233,26 @@ function getContextPercent(transcriptPath: string): number {
   return 0;
 }
 
-function getGitInfo(cwd: string): { branch: string; added: number; removed: number } {
+async function getGitInfo(cwd: string): Promise<{ branch: string; added: number; removed: number }> {
   try {
-    // Single git command for all info
-    const output = execSync(
-      'git branch --show-current && git diff --numstat && echo "---" && git diff --numstat --cached',
-      { cwd, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"], timeout: GIT_TIMEOUT_MS }
-    );
+    const proc = Bun.spawn(["git", "branch", "--show-current"], {
+      cwd,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const branchOut = await new Response(proc.stdout).text();
+    const branch = branchOut.trim();
 
-    const [branchLine, ...rest] = output.split("\n");
-    const branch = branchLine?.trim() || "";
+    const diffProc = Bun.spawn(["git", "diff", "HEAD", "--numstat"], {
+      cwd,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const diffOut = await new Response(diffProc.stdout).text();
+
     let added = 0, removed = 0;
-
-    for (const line of rest) {
-      if (line === "---" || !line.trim()) continue;
+    for (const line of diffOut.split("\n")) {
+      if (!line.trim()) continue;
       const [a, r] = line.split("\t");
       if (a !== "-") added += parseInt(a, 10) || 0;
       if (r !== "-") removed += parseInt(r, 10) || 0;
@@ -224,23 +268,20 @@ function getGitInfo(cwd: string): { branch: string; added: number; removed: numb
 // OUTPUT
 // ============================================================================
 
-function buildOutput(usage: { percent: number; resetMs: number } | null, ctxPercent: number, git: { branch: string; added: number; removed: number }, sessionMs: number): string {
+function buildOutput(usage: UsageData | null, ctxPercent: number, git: { branch: string; added: number; removed: number }): string {
   const { gray, white, yellow, green, red, reset } = COLOR;
 
-  const usagePercent = usage?.percent ?? ctxPercent;
-  const resetTime = formatTime(usage?.resetMs ?? (5 * 60 * 60 * 1000 - sessionMs));
+  const usagePercent = usage?.percent ?? 0;
+  const resetTime = formatTime(usage?.resetMs ?? 0);
+  const weekPercent = usage?.weekPercent ?? 0;
 
-  // Line 1: Progress bar with usage
-  const line1 = `${progressBar(usagePercent)} ${white}${usagePercent.toFixed(1)}%${reset} ${gray}|${reset} ${white}${resetTime}${reset}`;
+  const line1 = `${progressBar(usagePercent)} ${white}${usagePercent.toFixed(1)}%${reset} ${gray}|${reset} ${white}${resetTime}${reset} ${gray}|${reset} ${gray}Week:${reset} ${white}${weekPercent.toFixed(1)}%${reset}`;
 
-  // Line 2: Context + Git info
   const parts = [`${gray}Ctx:${reset} ${white}${ctxPercent.toFixed(1)}%${reset}`];
   if (git.branch) parts.push(`${yellow}⚡${git.branch}${reset}`);
   if (git.added || git.removed) parts.push(`${gray}(${green}+${git.added}${gray},${red}-${git.removed}${gray})${reset}`);
 
-  const line2 = parts.join(` ${gray}|${reset} `);
-
-  return `${line1}\n${line2}`;
+  return `${line1}\n${parts.join(` ${gray}|${reset} `)}`;
 }
 
 // ============================================================================
@@ -249,22 +290,21 @@ function buildOutput(usage: { percent: number; resetMs: number } | null, ctxPerc
 
 async function main(): Promise<void> {
   try {
-    // Read stdin
+    const decoder = new TextDecoder();
     const chunks: string[] = [];
     for await (const chunk of Bun.stdin.stream()) {
-      chunks.push(new TextDecoder().decode(chunk));
+      chunks.push(decoder.decode(chunk, { stream: true }));
     }
     const input: HookInput = JSON.parse(chunks.join(""));
     const cwd = input.workspace?.current_dir || input.cwd;
 
-    // Fetch all data in parallel
     const [usage, ctxPercent, git] = await Promise.all([
       fetchUsage(),
-      Promise.resolve(getContextPercent(input.transcript_path)),
-      Promise.resolve(getGitInfo(cwd)),
+      getContextPercent(input.transcript_path),
+      getGitInfo(cwd),
     ]);
 
-    console.log(buildOutput(usage, ctxPercent, git, input.cost?.total_duration_ms ?? 0));
+    console.log(buildOutput(usage, ctxPercent, git));
   } catch {
     console.log(`${COLOR.gray}--${COLOR.reset}\n`);
   }
