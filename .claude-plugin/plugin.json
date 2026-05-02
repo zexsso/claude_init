@@ -1,7 +1,7 @@
 {
   "name": "cc-init",
-  "description": "Productivity commands, agents, and security hooks for Claude Code - includes git workflows, CI monitoring, code exploration, and command validation",
-  "version": "1.0.0",
+  "description": "Claude Code plugin: skills (audit, commit) + Bun statusline showing 5h/weekly usage and context tokens",
+  "version": "1.1.0",
   "author": {
     "name": "cc-init"
   }
