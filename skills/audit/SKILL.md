@@ -10,7 +10,7 @@ allowed-tools: Task WebFetch WebSearch Read Grep Glob Skill
 
 You are running a multi-agent research audit. The goal is to spawn many specialized researchers, gather independent perspectives across codebase + library docs + web + existing skills, surface real tradeoffs, then synthesize one report that helps the user pick the best implementation path.
 
-**Hard rule: do NOT implement anything.** Stop at the report. The user picks what to do next (`/epct`, `/oneshot`, manual work).
+**Hard rule: do NOT implement anything.** Stop at the report. The user picks what to do next.
 
 ## Audit topic
 
@@ -134,7 +134,7 @@ Print the report directly in chat. Do NOT write it to a file unless the user ask
 
 End the report with this exact line:
 
-> Audit done. To act on this: `/epct` for a planned implementation, `/oneshot` for a fast direct one, or describe what you want built.
+> Audit done. Tell me what to build next, or take it from here yourself.
 
 ## Rules
 
