@@ -1,8 +1,0 @@
-{
-  "name": "cc-init",
-  "description": "Productivity commands, agents, and security hooks for Claude Code - includes git workflows, CI monitoring, code exploration, and command validation",
-  "version": "1.0.0",
-  "author": {
-    "name": "cc-init"
-  }
-}

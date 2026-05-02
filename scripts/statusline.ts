@@ -83,10 +83,10 @@ interface UsageData {
 // CACHING
 // ============================================================================
 
-function readCache(): CachedUsage | null {
+function readCache(stale = false): CachedUsage | null {
   try {
     const data = JSON.parse(readFileSync(CACHE_FILE, "utf8")) as CachedUsage;
-    if (Date.now() - data.cachedAt < CACHE_TTL_MS) return data;
+    if (stale || Date.now() - data.cachedAt < CACHE_TTL_MS) return data;
   } catch {}
   return null;
 }
@@ -186,7 +186,10 @@ async function fetchUsage(): Promise<UsageData | null> {
       },
     });
 
-    if (!res.ok) return null;
+    if (!res.ok) {
+      const stale = readCache(true);
+      return stale ? cachedToUsage(stale) : null;
+    }
 
     const data = await res.json();
     const now = Date.now();
@@ -204,7 +207,8 @@ async function fetchUsage(): Promise<UsageData | null> {
     writeCache(cacheData);
     return cachedToUsage({ ...cacheData, cachedAt: now });
   } catch {
-    return null;
+    const stale = readCache(true);
+    return stale ? cachedToUsage(stale) : null;
   }
 }
 

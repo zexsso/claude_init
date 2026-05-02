@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**cc-init** is a Claude Code plugin with commands, agents, and a statusline.
+**cc-init** is a Claude Code plugin with skills, custom agents, and a statusline.
+
+Aligned with Anthropic's 2026 guidance: skills are the primary extension surface (commands have been merged into skills). New extensions should be added under `skills/`. Existing files in `commands/` still work, but `skills/` is preferred for anything new — supports supporting files, frontmatter controls, and auto-trigger.
 
 ## Structure
 
@@ -12,50 +14,60 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 cc-init/
 ├── .claude-plugin/
 │   └── plugin.json      # Plugin manifest
-├── commands/            # Slash commands (.md)
-├── agents/              # Agents (.md)
+├── skills/              # Skills (preferred extension type)
+│   ├── audit/
+│   │   ├── SKILL.md
+│   │   └── evals/
+│   └── commit/
+│       └── SKILL.md
 ├── scripts/
 │   └── statusline.ts    # Statusline script (Bun)
+├── cli.ts               # CLI installer (handles commands/agents/skills)
 ├── README.md
 └── CLAUDE.md
 ```
 
 ## Plugin Components
 
-### Commands (`commands/*.md`)
+### Skills (`skills/<skill-name>/SKILL.md`)
 
-YAML frontmatter options:
-- `allowed-tools` - Tools the command can use
-- `description` - Shown in `/help`
-- `argument-hint` - Placeholder shown for arguments
+YAML frontmatter options (most useful):
 
-Available commands:
-| Command | Description |
-|---------|-------------|
-| `/commit` | Quick commit and push with minimal, clean messages |
-| `/create-pull-request` | Create and push PR with auto-generated title and description |
-| `/epct` | Systematic implementation using Explore-Plan-Code-Test methodology |
-| `/explore <question>` | Deep codebase exploration to answer specific questions |
-| `/fix-pr-comments [pr-number]` | Fetch PR review comments and implement all requested changes |
-| `/oneshot <feature>` | Ultra-fast feature implementation (Explore-Code-Test, no planning) |
-| `/run-tasks <issue|file>` | Execute GitHub issues or task files with full EPCT workflow and PR creation |
-| `/watch-ci [run-id]` | Monitor CI pipeline and automatically fix failures until green |
+- `name` — defaults to dir name; lowercase + hyphens, max 64 chars
+- `description` — what the skill does and when to trigger; primary auto-invoke signal. Front-load the key use case (capped at 1,536 chars in the listing)
+- `argument-hint` — placeholder shown in autocomplete (e.g. `<topic>`)
+- `allowed-tools` — pre-approved tools while skill is active (no permission prompt)
+- `disable-model-invocation: true` — manual-only invocation (use for /commit, /deploy)
+- `user-invocable: false` — Claude-only, hide from `/` menu (background knowledge skills)
+- `context: fork` + `agent: <type>` — run skill body in a forked subagent
+
+Available skills:
+
+| Skill     | Trigger                                         | Description                                                                                                            |
+| --------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `/audit`  | auto on decision/architecture/comparison phrases | Multi-agent research audit. Spawns parallel research, cross-questions, runs devil's advocate, returns comparative report. Stops at the report — does not implement. |
+| `/commit` | manual only (`disable-model-invocation: true`)  | Quick conventional commit + push with one-line message.                                                                |
 
 ### Agents (`agents/*.md`)
 
-Agent definitions with specialized prompts and tool access.
+This plugin currently ships no custom agents. Claude Code's built-in agents cover the needs:
 
-Available agents:
-| Agent | Model | Purpose |
-|-------|-------|---------|
-| `explore-codebase` | haiku | Find relevant code, patterns, and dependencies for feature implementation |
-| `explore-docs` | haiku | Retrieve library documentation via Context7 and WebFetch |
-| `websearch` | haiku | Quick web searches with summarized results |
-| `action` | haiku | Conditional batch executor (verify before acting, max 5 tasks) |
+- `Explore` — read-only codebase research (haiku, returns excerpts)
+- `Plan` — read-only research used in plan mode
+- `general-purpose` — full-tool agent for synthesis, web search (with WebSearch + WebFetch), and multi-step research
+
+If you add a custom agent later, drop a `.md` file in `agents/` (the dir gets created on first file). The CLI installer picks it up automatically on next `setup`.
+
+### Commands (`commands/*.md`)
+
+Currently empty — `commit` was migrated to a skill (`skills/commit/SKILL.md`). The `commands/` directory is preserved as a valid location for future legacy commands but new extensions should go in `skills/`.
+
+If you do add a command file, the same frontmatter as skills works (`allowed-tools`, `description`, `argument-hint`).
 
 ## Statusline (`scripts/statusline.ts`)
 
 Two-line output:
+
 ```
 [████████████████████] 96.1% | 2h 30m
 Ctx: 26.1% | ⚡main | (+14,-18)
@@ -66,7 +78,10 @@ Ctx: 26.1% | ⚡main | (+14,-18)
 - Context tokens from transcript file
 - Git info from `git` commands
 
+Cache: 30s TTL on disk at `tmpdir()/claude-statusline-cache.json`. Sync writes (commit `05b4391` fixed multi-session race). Stale-cache fallback on API failure.
+
 **Setup in `~/.claude/settings.json`:**
+
 ```json
 {
   "statusLine": {
@@ -79,25 +94,64 @@ Ctx: 26.1% | ⚡main | (+14,-18)
 
 ## Adding Components
 
-### New Command
+### New skill (preferred)
 
-Create `commands/my-command.md`:
+Create `skills/my-skill/SKILL.md`:
+
+```markdown
+---
+description: What this skill does and when to trigger. Be specific about user phrases that should fire it.
+allowed-tools: Read Grep Bash(git :*)
+argument-hint: <optional-arg>
+---
+
+Your skill instructions here. Imperative, focused, explain the why.
+```
+
+Optionally add supporting files (`scripts/`, `references/`, `evals/`) in the same directory. Reference them from `SKILL.md` so Claude knows when to load them.
+
+### New agent
+
+Create `agents/my-agent.md`:
+
+```markdown
+---
+name: my-agent
+description: When Claude should delegate to this agent. Be specific.
+model: haiku
+tools: Read, Grep, WebSearch
+---
+
+System prompt for the agent.
+```
+
+### New legacy command
+
+Discouraged for new content (use a skill instead). If needed:
+
 ```markdown
 ---
 allowed-tools: Bash(git :*), Read, Edit
-description: My command description
+description: Command description
 ---
 
-Prompt here...
+Prompt body.
 ```
 
-### New Agent
+## Local CLI Workflow
 
-Create `agents/my-agent.md` with agent definition.
+```bash
+bun cli.ts setup --global --symlink   # Install globally with symlinks (auto-updates on git pull)
+bun cli.ts status                     # See what's installed where
+bun cli.ts uninstall --global         # Remove
+```
+
+The CLI walks `commands/`, `agents/`, and `skills/` from the repo and copies/symlinks them into the target `.claude/` directory. Skills are detected as subdirs containing a `SKILL.md`.
 
 ## Docs
 
-- [Statusline](https://code.claude.com/docs/en/statusline)
-- [Slash Commands](https://code.claude.com/docs/en/slash-commands)
+- [Skills](https://code.claude.com/docs/en/skills) — primary extension type (2026)
 - [Sub-agents](https://code.claude.com/docs/en/sub-agents)
 - [Plugins](https://code.claude.com/docs/en/plugins)
+- [Statusline](https://code.claude.com/docs/en/statusline)
+- [Slash commands (legacy)](https://code.claude.com/docs/en/slash-commands)

@@ -1,0 +1,29 @@
+{
+  "skill_name": "audit",
+  "evals": [
+    {
+      "id": 1,
+      "eval_name": "feature-cache-statusline",
+      "kind": "feature",
+      "prompt": "j'aimerais ajouter un cache pour les appels à l'API anthropic depuis le statusline (scripts/statusline.ts), pour éviter de hammer l'endpoint /api/oauth/usage à chaque rendu. Quelle est la meilleure manière de l'implementer dans ce projet?",
+      "expected_output": "Report in French. Codebase citations of statusline.ts:line for current cache behavior. Options table comparing in-memory, file-based, TTL strategies. Recommendation conditional on user constraints (multi-session? cold start cost?). Open questions surfaced. Next steps concrete with file paths. No implementation.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "eval_name": "lib-choice-test-runner",
+      "kind": "lib",
+      "prompt": "/audit should I use Bun's built-in test runner or Vitest for testing the cc-init scripts (statusline.ts mainly)? Walk me through pros/cons.",
+      "expected_output": "Arch/lib template used. Both options analyzed with pros/cons/lock-in/migration cost columns. Devil's advocate pass on the leading recommendation present. Decision criteria conditional (if X matters → A, if Y matters → B). Citations to library docs via Context7. Skill check ran. No implementation.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "eval_name": "arch-split-plugins",
+      "kind": "arch",
+      "prompt": "I want to split cc-init into separate plugins so users can install just the agents, just the commands, or just the statusline independently. Audit pros and cons and tell me if this is worth doing.",
+      "expected_output": "Arch template. Codebase research on current plugin manifest + commands/agents structure with file:line refs. Options table including 'do nothing' as one option. Devil's advocate findings present (challenger argues against splitting). Recommendation conditional. Lock-in + migration cost columns filled. Open questions about plugin distribution. No implementation.",
+      "files": []
+    }
+  ]
+}

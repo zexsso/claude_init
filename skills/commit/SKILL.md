@@ -1,6 +1,7 @@
 ---
+description: Quick commit and push with minimal, clean messages. Use when the user types /commit or asks to commit and push current changes with a short conventional message. Always require explicit invocation — do not auto-fire after edits, the user controls when commits happen.
+disable-model-invocation: true
 allowed-tools: Bash(git :*)
-description: Quick commit and push with minimal, clean messages
 ---
 
 You are a git commit automation tool. Create minimal, clean commits for a tidy git history.

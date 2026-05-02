@@ -8,7 +8,7 @@
  *   bun cli.ts status
  */
 
-import { existsSync, mkdirSync, cpSync, rmSync, readdirSync, readlinkSync, symlinkSync, unlinkSync } from "node:fs";
+import { existsSync, mkdirSync, cpSync, rmSync, readdirSync, statSync, symlinkSync, unlinkSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, dirname, resolve } from "node:path";
 import { execSync } from "node:child_process";
@@ -92,6 +92,51 @@ function installFiles(srcDir: string, targetDir: string, useSymlink: boolean): I
   return { count: files.length, symlinkFailed };
 }
 
+function listSkillDirs(srcDir: string): string[] {
+  if (!existsSync(srcDir)) return [];
+  return readdirSync(srcDir).filter(name => {
+    const full = join(srcDir, name);
+    return statSync(full).isDirectory() && existsSync(join(full, "SKILL.md"));
+  });
+}
+
+function installSkills(srcDir: string, targetDir: string, useSymlink: boolean): InstallResult {
+  const skillNames = listSkillDirs(srcDir);
+  if (skillNames.length === 0) return { count: 0, symlinkFailed: false };
+
+  mkdirSync(targetDir, { recursive: true });
+  let symlinkFailed = false;
+
+  for (const name of skillNames) {
+    const src = join(srcDir, name);
+    const dest = join(targetDir, name);
+
+    // Remove existing (dir or symlink)
+    if (existsSync(dest)) {
+      rmSync(dest, { recursive: true, force: true });
+    }
+
+    if (useSymlink) {
+      try {
+        symlinkSync(resolve(src), dest, "dir");
+        log.item(`Linked: ${name}/`);
+      } catch (err: any) {
+        if (err.code === "EPERM") {
+          symlinkFailed = true;
+          cpSync(src, dest, { recursive: true });
+          log.item(`Copied: ${name}/ (symlink failed)`);
+        } else {
+          throw err;
+        }
+      }
+    } else {
+      cpSync(src, dest, { recursive: true });
+      log.item(`Copied: ${name}/`);
+    }
+  }
+  return { count: skillNames.length, symlinkFailed };
+}
+
 function removeFiles(srcDir: string, targetDir: string): number {
   if (!existsSync(srcDir) || !existsSync(targetDir)) return 0;
 
@@ -109,6 +154,23 @@ function removeFiles(srcDir: string, targetDir: string): number {
   return removed;
 }
 
+function removeSkills(srcDir: string, targetDir: string): number {
+  if (!existsSync(srcDir) || !existsSync(targetDir)) return 0;
+
+  const skillNames = listSkillDirs(srcDir);
+  let removed = 0;
+
+  for (const name of skillNames) {
+    const dest = join(targetDir, name);
+    if (existsSync(dest)) {
+      rmSync(dest, { recursive: true, force: true });
+      log.item(`Removed: ${name}/`);
+      removed++;
+    }
+  }
+  return removed;
+}
+
 function setup(args: string[]) {
   const forceGlobal = args.includes("--global") || args.includes("-g");
   const useSymlink = args.includes("--symlink") || args.includes("-s");
@@ -118,7 +180,6 @@ function setup(args: string[]) {
 
   log.info(`Installing to ${isGlobal ? "~/.claude (global)" : ".claude (project)"}`);
 
-  // Install commands
   log.info("Installing commands...");
   const cmdResult = installFiles(
     join(PKG_ROOT, "commands"),
@@ -126,7 +187,6 @@ function setup(args: string[]) {
     useSymlink
   );
 
-  // Install agents
   log.info("Installing agents...");
   const agentResult = installFiles(
     join(PKG_ROOT, "agents"),
@@ -134,11 +194,20 @@ function setup(args: string[]) {
     useSymlink
   );
 
+  log.info("Installing skills...");
+  const skillResult = installSkills(
+    join(PKG_ROOT, "skills"),
+    join(targetDir, "skills"),
+    useSymlink
+  );
+
   console.log();
-  log.success(`Installed ${cmdResult.count} commands and ${agentResult.count} agents!`);
+  log.success(
+    `Installed ${cmdResult.count} commands, ${agentResult.count} agents, and ${skillResult.count} skills!`
+  );
 
   // Symlink permission warning
-  const symlinkFailed = cmdResult.symlinkFailed || agentResult.symlinkFailed;
+  const symlinkFailed = cmdResult.symlinkFailed || agentResult.symlinkFailed || skillResult.symlinkFailed;
   if (symlinkFailed) {
     console.log();
     log.warn("Symlinks failed due to permission error.");
@@ -181,9 +250,10 @@ function uninstall(args: string[]) {
 
   const cmdRemoved = removeFiles(join(PKG_ROOT, "commands"), join(targetDir, "commands"));
   const agentRemoved = removeFiles(join(PKG_ROOT, "agents"), join(targetDir, "agents"));
+  const skillRemoved = removeSkills(join(PKG_ROOT, "skills"), join(targetDir, "skills"));
 
   console.log();
-  log.success(`Removed ${cmdRemoved} commands and ${agentRemoved} agents`);
+  log.success(`Removed ${cmdRemoved} commands, ${agentRemoved} agents, and ${skillRemoved} skills`);
   log.info("Statusline config in settings.json was preserved");
 }
 
@@ -200,19 +270,34 @@ function status() {
 
     const cmdDir = join(loc.path, "commands");
     const agentDir = join(loc.path, "agents");
+    const skillDir = join(loc.path, "skills");
 
     if (existsSync(cmdDir)) {
       const cmds = readdirSync(cmdDir).filter(f => f.endsWith(".md"));
-      log.item(`Commands: ${cmds.length} (${cmds.map(f => f.replace(".md", "")).join(", ")})`);
+      log.item(`Commands: ${cmds.length}${cmds.length ? ` (${cmds.map(f => f.replace(".md", "")).join(", ")})` : ""}`);
     } else {
       log.item("Commands: none");
     }
 
     if (existsSync(agentDir)) {
       const agents = readdirSync(agentDir).filter(f => f.endsWith(".md"));
-      log.item(`Agents: ${agents.length} (${agents.map(f => f.replace(".md", "")).join(", ")})`);
+      log.item(`Agents: ${agents.length}${agents.length ? ` (${agents.map(f => f.replace(".md", "")).join(", ")})` : ""}`);
     } else {
       log.item("Agents: none");
+    }
+
+    if (existsSync(skillDir)) {
+      const skills = readdirSync(skillDir).filter(name => {
+        const full = join(skillDir, name);
+        try {
+          return statSync(full).isDirectory() && existsSync(join(full, "SKILL.md"));
+        } catch {
+          return false;
+        }
+      });
+      log.item(`Skills: ${skills.length}${skills.length ? ` (${skills.join(", ")})` : ""}`);
+    } else {
+      log.item("Skills: none");
     }
     console.log();
   }
@@ -226,8 +311,8 @@ ${c.yellow}Usage:${c.reset}
   bun cli.ts <command> [options]
 
 ${c.yellow}Commands:${c.reset}
-  setup       Install commands and agents
-  uninstall   Remove installed commands and agents
+  setup       Install commands, agents, and skills
+  uninstall   Remove installed commands, agents, and skills
   status      Show installation status
 
 ${c.yellow}Options:${c.reset}

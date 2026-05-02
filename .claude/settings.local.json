@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rm -rf ~/.claude/agents ~/.claude/commands ~/.claude/skills)",
+      "Bash(bun /d/Documents/DEV/cc-init/cli.ts setup --global --symlink)"
+    ]
+  }
+}
