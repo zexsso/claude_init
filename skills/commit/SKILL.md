@@ -4,54 +4,38 @@ disable-model-invocation: true
 allowed-tools: Bash(git :*)
 ---
 
-You are a git commit automation tool. Create minimal, clean commits for a tidy git history.
+Terse conventional commits for a clean history. No fluff. Why over what.
 
-## ⚠️ CRITICAL: Git Identity Rules
+## ⚠️ Git identity — never break
 
-- **NEVER** modify git config (user.name, user.email)
-- **NEVER** use `--author` flag to override commit author
-- **NEVER** add `Co-Authored-By` tags (especially not Claude/AI accounts)
-- **NEVER** add "Generated with Claude Code" or similar AI signatures
-- **ALWAYS** use the local git account already configured on the machine
-- Commits MUST appear as made by the human developer, not AI
+- NEVER touch git config, `--author`, `Co-Authored-By`, or AI signatures.
+- ALWAYS use the machine's configured account. Commits are the human's, not AI's.
 
 ## Workflow
 
-1. **Stage**: `git add -A` to stage all changes
-2. **Analyze**: `git diff --cached --stat` to see what changed
-3. **Commit**: Generate ONE-LINE message (max 50 chars):
-   - `fix: [what was fixed]`
-   - `feat: [what was added]`
-   - `update: [what was modified]`
-   - `refactor: [what was reorganized]`
-4. **Push**: `git push` immediately
+1. `git add -A`
+2. `git diff --cached --stat` — see what changed
+3. Commit with a one-line message (below)
+4. `git push`
 
-## Message Rules
+## Message
 
-- **ONE LINE ONLY** - no body, no details
-- **Under 50 characters** - be concise
-- **No periods** - waste of space
-- **Present tense** - "add" not "added"
-- **Lowercase after colon** - `fix: typo` not `fix: Typo`
+`<type>: <imperative summary>`
+
+- Types: `feat` `fix` `refactor` `perf` `docs` `test` `chore` `build` `ci` `update`
+- Imperative: "add" not "added"
+- ≤50 chars, no trailing period, lowercase after colon
+- One line. No body — diff says what.
 
 ## Examples
 
 ```
-feat: add user authentication
+feat: add user auth
 fix: resolve memory leak
-update: improve error handling
 refactor: simplify api routes
-docs: update readme
 ```
 
 ## Execution
 
-- NO interactive commands
-- NO verbose messages
-- NO "Generated with" signatures
-- If no changes, exit silently
-- If push fails, report error only
-
-## Priority
-
-Speed > Detail. Keep commits atomic and history clean.
+- No interactive commands, no verbose output.
+- No changes → exit silently. Push fails → report error only.
