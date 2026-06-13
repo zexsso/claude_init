@@ -2,8 +2,8 @@
 /**
  * Claude Code Statusline
  *
- * Line 1: [████████████] 2.0% | 4h 12m | Wk: 0.0%
- * Line 2: Ctx: 26.1% | ⚡main | (+14,-18)
+ * Line 1: [████████████] 2.0% | 4h 12m | Week: 0.0%
+ * Line 2: Opus 4.8 | Ctx: 26.1% | ⚡main | (+14,-18)
  */
 
 import { readFileSync, writeFileSync } from "node:fs";
@@ -62,6 +62,7 @@ interface HookInput {
   cwd: string;
   workspace: { current_dir: string };
   cost: { total_duration_ms: number };
+  model?: { id?: string; display_name?: string };
 }
 
 interface CachedUsage {
@@ -268,7 +269,7 @@ function getGitInfo(cwd: string): { branch: string; added: number; removed: numb
 // OUTPUT
 // ============================================================================
 
-function buildOutput(usage: UsageData | null, ctxPercent: number, git: { branch: string; added: number; removed: number }): string {
+function buildOutput(usage: UsageData | null, ctxPercent: number, git: { branch: string; added: number; removed: number }, model: string): string {
   const { gray, white, yellow, green, red, reset } = COLOR;
 
   const usagePercent = usage?.percent ?? 0;
@@ -277,7 +278,7 @@ function buildOutput(usage: UsageData | null, ctxPercent: number, git: { branch:
 
   const line1 = `${progressBar(usagePercent)} ${white}${usagePercent.toFixed(1)}%${reset} ${gray}|${reset} ${white}${resetTime}${reset} ${gray}|${reset} ${gray}Week:${reset} ${white}${weekPercent.toFixed(1)}%${reset}`;
 
-  const parts = [`${gray}Ctx:${reset} ${white}${ctxPercent.toFixed(1)}%${reset}`];
+  const parts = [`${white}${model}${reset}`, `${gray}Ctx:${reset} ${white}${ctxPercent.toFixed(1)}%${reset}`];
   if (git.branch) parts.push(`${yellow}⚡${git.branch}${reset}`);
   if (git.added || git.removed) parts.push(`${gray}(${green}+${git.added}${gray},${red}-${git.removed}${gray})${reset}`);
 
@@ -297,6 +298,7 @@ async function main(): Promise<void> {
     }
     const input: HookInput = JSON.parse(chunks.join(""));
     const cwd = input.workspace?.current_dir || input.cwd;
+    const model = input.model?.display_name || input.model?.id || "?";
 
     const git = getGitInfo(cwd);
     const [usage, ctxPercent] = await Promise.all([
@@ -304,7 +306,7 @@ async function main(): Promise<void> {
       getContextPercent(input.transcript_path),
     ]);
 
-    console.log(buildOutput(usage, ctxPercent, git));
+    console.log(buildOutput(usage, ctxPercent, git, model));
   } catch {
     console.log(`${COLOR.gray}--${COLOR.reset}\n`);
   }
